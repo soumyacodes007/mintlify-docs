@@ -1,0 +1,27 @@
+---
+title: "Get Issuer Public Key"
+api: "GET /api/v1/issuer/pubkey"
+description: "Fetches the issuer's uncompressed secp256k1 public key."
+---
+
+The React widget calls this endpoint upon initialization to retrieve the cryptographic key used for ECIES encryption. **It is critical that identity data is encrypted before it ever leaves the client's browser.**
+
+This design guarantees that the raw Aadhaar XML or PII is never transmitted to the AlgoKYC backend.
+
+<RequestExample>
+```bash cURL
+curl --request GET \
+  --url https://api.algokyc.com/api/v1/issuer/pubkey \
+  --header 'Accept: application/json'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 OK
+{
+  "pubkey_hex": "04c2b9a7f...",
+  "format": "secp256k1 uncompressed (04 || x || y)",
+  "bytes": 65
+}
+```
+</ResponseExample>

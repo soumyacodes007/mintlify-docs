@@ -1,0 +1,38 @@
+---
+title: "Create Court Order"
+api: "POST /api/v1/court-order"
+description: "Initiate a legal request to decrypt an identity and revoke a credential."
+---
+
+This endpoint is restricted to the **Issuer**. It alerts the 5 Key Custodians that a valid legal request has been made to deanonymize a specific `nullifier_hex`. 
+
+To process this order, **3 out of the 5** Custodians must independently approve it via the Custodian Dashboard before the decryption key can be mathematically reconstructed.
+
+## Authentication
+
+All issuer endpoints require the `X-API-Key` header.
+
+## Body
+
+<ParamField body="nullifier_hex" type="string" required>
+  The 64-character hash of the target to be revoked or investigated.
+</ParamField>
+
+<ParamField body="reason" type="string" required>
+  The legal justification, statute reference, or internal case number for the court order.
+</ParamField>
+
+<ParamField body="pdf_url" type="string">
+  A secure link to the scanned, signed PDF order from the Judiciary. Custodians will review this document before voting.
+</ParamField>
+
+<ResponseExample>
+```json 200 OK
+{
+  "order_id": "8b9cad0e-72a2-b281-0081-8b9cad0e1f20",
+  "status": "pending",
+  "message": "Court order created. 5 custodians must review — 3 approvals needed to proceed.",
+  "expires_at": 1709428500.0
+}
+```
+</ResponseExample>

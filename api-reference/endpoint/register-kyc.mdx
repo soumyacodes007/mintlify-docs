@@ -1,0 +1,48 @@
+---
+title: "Register KYC Proof"
+api: "POST /api/v1/register"
+description: "Process a validated Zero-Knowledge proof and register the nullifier on-chain."
+---
+
+The main KYC registration endpoint. It verifies the cryptographic `snarkjs` Groth16 proof. If the proof is mathematically sound, the backend pays the transaction fee to anchor the `nullifier` into the Algorand `NullifierRegistry` smart contract.
+
+## Body
+
+<ParamField body="public_signals" type="array" required>
+  The public output array from the `snarkjs` proof (e.g., Nullifier Haash, SMT Root, Authority Signature).
+</ParamField>
+
+<ParamField body="proof" type="object" required>
+  The Groth16 cryptographic proof object.
+  <Expandable title="Proof Object Properties">
+    <ParamField body="pi_a" type="array" required>Point A on the BN254 curve</ParamField>
+    <ParamField body="pi_b" type="array" required>Point B on the BN254 curve</ParamField>
+    <ParamField body="pi_c" type="array" required>Point C on the BN254 curve</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="encrypted_blob" type="string">
+  The ECIES-encrypted identity package. Only supplied if Conditional Anonymity is enabled.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the proof was valid and the Algorand transaction succeeded.
+</ResponseField>
+
+<ResponseField name="txid" type="string">
+  The Algorand transaction ID for the NullifierRegistry interaction.
+</ResponseField>
+
+<ResponseExample>
+```json 200 OK
+{
+  "success": true,
+  "txid": "MC526N5AWJUZ57HEIUQATWVCLSW3GIYDDQGOKBYQCZSHRSZ4V7HQ",
+  "nullifier_hex": "156f82bc6f8d385dfb...",
+  "explorer_url": "https://allo.info/tx/MC52...",
+  "demo": false
+}
+```
+</ResponseExample>

@@ -1,0 +1,87 @@
+---
+title: "Security & Key Management"
+description: "How AlgoKYC balances Zero-Knowledge privacy with legal accountability using Shamir Secret Sharing."
+icon: "shield-halved"
+---
+
+## The Accountability Problem
+
+Zero-Knowledge KYC cannot mean anonymous crime. 
+
+Law enforcement requires a legally compliant path to reveal identity when a valid court order is issued for crimes like financial fraud, money laundering, or terrorism. 
+
+AlgoKYC implements **Conditional Anonymity**: User data is perfectly private and encrypted to everyone in the world, *except* an authorized legal proceeding hitting a multi-signature threshold.
+
+## The Encrypted Identity Blob
+
+During proof generation in the browser, a separate encrypted package is created and stored in Algorand box storage long alongside the ZK Proof.
+
+```javascript
+encrypted_blob = ECIES.encrypt(
+  plaintext: {
+    aadhaar_number: 'XXXX-XXXX-XXXX',
+    name:           'User Full Name',
+    dob:            '01/01/1995',
+    address:        '...',
+    phone:          '...',
+    nullifier:      '0xABC123...'   // Linking key
+  },
+  publicKey: issuer.publicKey       // Only issuer can decrypt
+)
+```
+
+This blob is stored in the Algorand Smart Contract's box storage.
+*Key:* `nullifier_hash`
+*Value:* `encrypted_blob`
+
+## Shamir Secret Sharing: 3-of-5 Custodian Threshold
+
+<Frame>
+  ![](/images/shamir-flow.png)
+</Frame>
+
+The issuer's master private key is **never stored in one place**. 
+
+It is split into 5 cryptographic shares using Shamir's Secret Sharing. Any **3 of 5** shares can reconstruct the key. No single entity—not even the protocol creators—can unilaterally decrypt user data.
+
+<CardGroup cols={2}>
+  <Card title="Custodian 1: UIDAI Representative" icon="building-columns">
+    Aadhaar authority — the natural custodian for identity data.
+  </Card>
+  <Card title="Custodian 2: Ministry of Finance" icon="scale-balanced">
+    Financial crime jurisdiction — required for AML cases.
+  </Card>
+  <Card title="Custodian 3: Licensed KYC Provider" icon="building-shield">
+    Regulated KYC entity under the RBI/SEBI framework.
+  </Card>
+  <Card title="Custodian 4: Algorand Foundation" icon="cube">
+    Protocol-level accountability.
+  </Card>
+</CardGroup>
+*Custodian 5: Independent Judiciary-Appointed Custodian*
+
+### Production Key Storage
+Each custodian's private key SHALL be stored in a FIPS 140-2 Level 3 certified HSM (e.g., Thales Luna, AWS CloudHSM). Key operations occur exclusively within the HSM secure boundary. Private keys never enter system RAM. Every decryption operation produces a tamper-evident audit log entry.
+
+## The Court Order Flow
+
+AlgoKYC implements a secure Dashboard specifically for this decryption process.
+
+1. **Crime Detected:** A suspect wallet is flagged by authorities.
+2. **Chain Query:** Government queries Algorand; the Nullifier linked to the wallet is identified.
+3. **Order Issued:** A court order is issued to the AlgoKYC Issuer.
+4. **Threshold Verification:** The 5 custodians log into the AlgoKYC Dashboard and independently verify the court order PDF.
+5. **Decryption:** If **3 of 5** custodians hit "Approve", they cryptographically combine their HSM shares.
+6. **Identity Revealed:** The master key is reconstructed in-memory for a fraction of a second, the specific user's blob is decrypted, and their Name/DOB/Aadhaar is revealed.
+7. **Wipe & Revoke:** An audit log is written, the key is wiped from memory, and the "Revoke" button permanently bans the Nullifier from the ecosystem.
+
+## Threat Model Mitigation
+
+| Threat | Impact | AlgoKYC Mitigation |
+| :--- | :--- | :--- |
+| **Proof forgery** | False KYC claim | Cryptographic soundness of PLONK BN254. |
+| **Blob decryption** | Identity exposure | ECIES encryption — requires issuer private key. |
+| **Single issuer compromise** | Mass deanonymization | Shamir 3-of-5 split. Complete key doesn't exist. |
+| **Cross-app tracking** | Privacy destruction | Per-app nullifiers (`Poseidon(uid, app_id, secret)`). |
+| **XML forgery** | KYC bypass | UIDAI RSA-2048 signature verified as the first circuit constraint. |
+| **Smart Contract Hacks** | Ledger corruption | Python (PuyaPy / AlgoKit) ARC-4 specs and strict ARC-56 compliance. |

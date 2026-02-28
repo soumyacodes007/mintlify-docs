@@ -1,33 +1,115 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: "API Reference"
+description: "REST API endpoints for the AlgoKYC Backend Server"
+icon: "server"
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+The AlgoKYC ecosystem relies on a Python FastAPI backend to handle on-chain transactions, verify Zero-Knowledge proofs, and manage the Shamir Secret Sharing threshold for court orders. 
 
-## Welcome
-
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
-
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+This page documents the core API endpoints used by the SDK and the Custodian Dashboard.
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+All endpoints that perform administrative or issuer-level actions (like creating court orders or executing revocations) require an API key passed in the headers.
 
-```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+```http
+X-API-Key: algokyc-dev-secret-change-in-production
 ```
+
+---
+
+## 1. Widget Integration API
+
+These endpoints are used automatically by the `<AlgoKYC />` React widget during the user flow.
+
+### Get Issuer Public Key
+
+`<ResponseField name="GET" type="/api/v1/issuer/pubkey" />`
+
+Fetches the issuer's uncompressed secp256k1 public key. The widget uses this to perform ECIES encryption on the user's identity data *before* submission. The raw identity never reaches the backend.
+
+<ResponseExample>
+```json Response
+{
+  "pubkey_hex": "04c2b9a7f...",
+  "format": "secp256k1 uncompressed (04 || x || y)",
+  "bytes": 65
+}
+```
+</ResponseExample>
+
+### Register KYC Proof
+
+`<ResponseField name="POST" type="/api/v1/register" />`
+
+The main KYC registration endpoint. It verifies the `snarkjs` Groth16 proof and, if mathematically valid, pays the Algorand transaction fee to register the nullifier on the `NullifierRegistry` smart contract.
+
+**Body Parameters:**
+*   `public_signals` (array): The public inputs from the ZK proof (Nullifier, Merkle Root, App ID, etc).
+*   `proof` (object): The mathematical `pi_a`, `pi_b`, `pi_c` proof objects.
+*   `encrypted_blob` (string, optional): The ECIES-encrypted identity package.
+
+<ResponseExample>
+```json Response
+{
+  "success": true,
+  "txid": "MC526N5AWJUZ57HEIUQATWVCLSW3GIYDDQGOKBYQCZSHRSZ4V7HQ",
+  "nullifier_hex": "156f82bc6f8d385dfb...",
+  "explorer_url": "https://allo.info/tx/MC52...",
+  "demo": false
+}
+```
+</ResponseExample>
+
+---
+
+## 2. Custodian & Court Order API
+
+These endpoints power the Custodian Dashboard and manage the conditional anonymity decryption flow.
+
+### Create Court Order `[Issuer Auth Required]`
+
+`<ResponseField name="POST" type="/api/v1/court-order" />`
+
+Initiates a court order against a specific nullifier. This alerts the 5 custodians that an identity reveal has been legally requested.
+
+**Body Parameters:**
+*   `nullifier_hex` (string): The 64-character nullifier to target.
+*   `reason` (string): The legal justification or case number.
+*   `pdf_url` (string, optional): Link to the scanned court order.
+
+### Submit Custodian Vote
+
+`<ResponseField name="POST" type="/api/v1/court-order/{order_id}/vote" />`
+
+A custodian casts their vote. If this vote pushes the approvals to the **3 of 5** threshold, the backend instantly combines the HSM Shamir shares in-memory, decrypts the identity blob, and returns the identity in the response.
+
+**Body Parameters:**
+*   `custodian_id` (string): The Algorand wallet address of the custodian.
+*   `custodian_num` (int): Custodian index (1-5).
+*   `approved` (boolean): `true` to approve, `false` to reject.
+*   `note` (string, optional): Justification for the vote.
+
+<ResponseExample>
+```json Success Response (Threshold Met)
+{
+  "order_id": "8b9cad0e...",
+  "status": "approved",
+  "approvals": 3,
+  "identity_decrypted": true,
+  "message": "✅ Threshold reached! Identity decrypted in-memory.",
+  "decrypted_identity": {
+      "name": "Satish Kumar",
+      "dob": "1995-01-01",
+      "uid": "XXXX-XXXX-7432"
+  },
+  "identity_warning": "⚠️ Identity data is in-memory only. Displayed ONCE then discarded."
+}
+```
+</ResponseExample>
+
+### Execute On-Chain Revocation `[Issuer Auth Required]`
+
+`<ResponseField name="POST" type="/api/v1/court-order/{order_id}/execute" />`
+
+Executes the revocation for an *approved* court order. Calls the `invalidate()` method on the Algorand `NullifierRegistry` smart contract and deletes the Box storage, permanently banning the user from the KYC ecosystem.

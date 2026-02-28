@@ -1,0 +1,73 @@
+---
+title: "SDK Integration"
+description: "How to add Zero-Knowledge KYC to your Algorand dApp in 3 lines of code."
+icon: "code"
+---
+
+The AlgoKYC SDK is designed to be so simple that a developer who has never heard of Zero-Knowledge proofs can add DPDP-compliant KYC to their Algorand application in under 5 minutes. 
+
+All cryptographic complexity is hidden behind a single React widget and a single server-side verification function.
+
+## 1. Installation
+
+Install the published SDK package via npm, yarn, or pnpm.
+
+```bash
+npm install algokyc-sdk
+```
+
+## 2. The 3-Line Frontend Integration
+
+The client-side integration requires rendering the `<AlgoKYC />` React widget. This widget handles the complete flow: XML upload, local parsing, `snarkjs` WASM proof generation, encryption, and Algorand chain submission.
+
+```tsx
+import { AlgoKYC } from 'algokyc-sdk'
+
+// Render the widget in your dApp
+<AlgoKYC 
+  appId="your_dapp_name" 
+  onVerified={(credential) => grantUserAccess(credential)} 
+/>
+```
+
+> **Important:** The `appId` string YOU provide here is critical. The SDK uses this app ID to derive the nullifier (`Poseidon(aadhaar, appId, targetWallet)`). This ensures strict cross-app privacy. Users will have a completely different nullifier on your app versus someone else's.
+
+### Widget UX Flow
+
+1. User clicks **Verify KYC** in your app.
+2. The AlgoKYC widget opens with an embedded UIDAI webview.
+3. User completes OTP on the UIDAI portal. *The widget never sees the OTP.*
+4. The offline Aadhaar XML ZIP is auto-detected.
+5. The widget displays: `"Generating your privacy proof..."`
+6. `snarkjs` WASM runs locally in 2-5 seconds.
+7. The proof is submitted to the Algorand testnet/mainnet.
+8. A credential ASA is issued to the wallet.
+9. The widget closes, and your `onVerified()` callback fires. Your app grants access without ever touching the user's data.
+
+## 3. Server-Side Verification
+
+If you are running a centralized matching engine or a Python/Node backend, you can independently verify that a user's wallet holds a valid, non-revoked KYC credential.
+
+```typescript
+import { verifyKYC } from 'algokyc-sdk/server'
+
+// In your API route or backend
+const result = await verifyKYC(userWalletAddress)
+
+if (result.verified) {
+    console.log(`User tier: ${result.tier}`);
+    // Grant access to regulated action
+} else {
+    throw new Error(`KYC failed: ${result.reason}`); // e.g., 'revoked'
+}
+```
+
+*Note: `verifyKYC` queries the Algorand blockchain (specifically the NullifierRegistry smart contract and the Sparse Merkle Root) to ensure the credential is valid and has not been revoked by a court order. It does not require any PII.*
+
+## DPDP Compliance Guarantees for Developers
+
+By using this SDK, your application guarantees:
+*   **Data Minimization:** You receive only a boolean KYC status.
+*   **Purpose Limitation:** Your `appId` scopes the credential to your app only.
+*   **Storage Limitation:** You never store PII; you store a cryptographic boolean.
+*   **Security Safeguards:** You offload all encryption and Shamir key management to the decentralized AlgoKYC protocol.

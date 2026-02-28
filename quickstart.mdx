@@ -1,80 +1,90 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Start integrating zero-knowledge identity into your Algorand application in under 5 minutes."
 ---
 
-## Get started in three steps
+## Setup your Development Environment
 
-Get your documentation site running locally and make your first customization.
+You'll need an active Algorand dApp and Node.js installed to use the AlgoKYC React widget. 
 
-### Step 1: Set up your local environment
+### 1. Install the SDK
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Install the `algokyc-sdk` from npm. This package contains both the React frontend widget and the server-side verification utilities.
 
-### Step 2: Deploy your changes
+```bash
+npm install algokyc-sdk
+```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+### 2. Add the React Widget
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+Import the `<AlgoKYC />` component into your application. Place it wherever you want users to initiate the KYC process.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+```tsx src/App.tsx
+import { AlgoKYC } from 'algokyc-sdk';
 
-### Step 3: Go live
+export default function MyDeFiApp() {
+  const handleVerificationSuccess = (credential) => {
+    console.log("User successfully verified with Nullifier:", credential.nullifier);
+    // Proceed to unlock regulated features (e.g., funding an account)
+  };
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  return (
+    <div>
+      <h1>Welcome to My DeFi Protocol</h1>
+      <p>Please complete KYC before trading.</p>
+      
+      {/* 
+        The appId is REQUIRED. This ensures the user's nullifier is completely 
+        unique to your application, preventing cross-app tracking.
+      */}
+      <AlgoKYC 
+        appId="my-defi-protocol-v1" 
+        onVerified={handleVerificationSuccess} 
+      />
+    </div>
+  );
+}
+```
 
-## Next steps
+### 3. Verify on your Backend (Optional but Recommended)
 
-Now that you have your docs running, explore these key features:
+If your architecture includes a separate backend (Node.js, python, etc.), you must independently verify that the wallet actually holds the credential before allowing database operations. You can do this without seeing any PII.
 
-<CardGroup cols={2}>
+```typescript src/server/api.ts
+import { checkKYCStats } from 'algokyc-sdk';
+import algosdk from 'algosdk';
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+// Initialize your Algod Client (Testnet or Mainnet)
+const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '');
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+// The standard AlgoKYC NullifierRegistry App ID on Testnet
+const REGISTRY_APP_ID = 756272073;
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+export async function checkUserStatus(walletAddress: string) {
+  // Queries the Algorand blockchain and the Sparse Merkle Tree
+  const isVerified = await checkKYCStats(algodClient, walletAddress, REGISTRY_APP_ID);
+  
+  if (isVerified) {
+    return { status: "approved", message: "User is KYC verified and not revoked." };
+  } else {
+    return { status: "rejected", message: "KYC missing, revoked, or fraud detected." };
+  }
+}
+```
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+## How it works for your Users
 
-</CardGroup>
+When your users click the widget:
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+1. They securely download an Offline XML from the government UIDAI portal.
+2. The widget generates the zero-knowledge proof *locally on their device*.
+3. Their raw data is immediately deleted from memory.
+4. The cryptographic proof is submitted to the Algorand blockchain.
+5. They receive an anonymous, non-transferable credential in their wallet.
+6. The `onVerified` callback fires, returning control to your application.
+
+<Frame>
+  ![](/images/checks-passed.png)
+</Frame>
+
+[Dive into the cryptographic architecture](/architecture) or [read about our Shamir key security model](/security) to understand how we make this legally compliant via conditional accountability.
